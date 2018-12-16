@@ -24,6 +24,7 @@ public void OnPluginStart()
 	if (!SQL_CheckConfig("VPNBlock"))
 	{
 		SQL_TConnect(OnSqlConnect, "default");
+		return;
 	}
 	SQL_TConnect(OnSqlConnect, "VPNBlock");
 }
