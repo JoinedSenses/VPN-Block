@@ -11,7 +11,7 @@ public Plugin myinfo =
 	name = "VPN Block",
 	author = "PwnK",
 	description = "Blocks VPNs",
-	version = "1.0",
+	version = "1.0.1",
 	url = "https://pelikriisi.fi/"
 };
 
@@ -23,7 +23,7 @@ public void OnPluginStart()
 	LoadTranslations ("vpnblock.phrases");
 	if (!SQL_CheckConfig("VPNBlock"))
 	{
-		SetFailState("No \"VPNBlock\" entry found on databases.cfg file");
+		SQL_TConnect(OnSqlConnect, "default");
 	}
 	SQL_TConnect(OnSqlConnect, "VPNBlock");
 }
