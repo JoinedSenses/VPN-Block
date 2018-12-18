@@ -11,7 +11,7 @@ public Plugin myinfo =
 	name = "VPN Block",
 	author = "PwnK",
 	description = "Blocks VPNs",
-	version = "1.0.1",
+	version = "1.0.2",
 	url = "https://pelikriisi.fi/"
 };
 
@@ -75,20 +75,17 @@ public void OnClientAuthorized(int client, const char[] auth)
 			SQL_GetError(db, error, sizeof(error));
 			VPNBlock_Log(2, _, _, error);
 			OnPluginStart();
-			return;
 		}
-		
-		if(!SQL_FetchRow(query))
+		else if (!SQL_FetchRow(query))
 		{
 			CheckIpHttp(ip, client);
-			return;
 		}
-		
-		if (SQL_FetchInt(query, 0) == 1)
+		else if (SQL_FetchInt(query, 0) == 1)
 		{
 			VPNBlock_Log(0, client, ip);
 			KickClient(client, "%t", "VPN Kick");
 		}
+		delete query;
 	}
 }
 
