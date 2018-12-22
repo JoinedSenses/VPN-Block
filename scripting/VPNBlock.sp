@@ -15,38 +15,37 @@ public Plugin myinfo =
 	url = "https://pelikriisi.fi/"
 };
 
-Handle db;
+Database g_db;
 bool g_written = false;
 
 public void OnPluginStart()
 {
 	LoadTranslations ("vpnblock.phrases");
-	if (!SQL_CheckConfig("VPNBlock"))
-	{
-		SQL_TConnect(OnSqlConnect, "default");
-		return;
-	}
-	SQL_TConnect(OnSqlConnect, "VPNBlock");
+	if (SQL_CheckConfig("VPNBlock"))
+		Database.Connect(OnSqlConnect, "VPNBlock");
+	else
+		Database.Connect(OnSqlConnect, "default");
+	RegAdminCmd("sm_vb_whitelist", CommandWhiteList, ADMFLAG_ROOT);
+	RegAdminCmd("sm_vb_unwhitelist", CommandUnWhiteList, ADMFLAG_ROOT);
 }
 
-public void OnSqlConnect(Handle owner, Handle hndl, const char[] error, any data)
+public void OnSqlConnect(Database db, const char[] error, any data)
 {
-	if (hndl == null)
+	if (db == null)
 	{
 		SetFailState("Databases don't work");
 	}
 	else
 	{
-		db = hndl;
-		char buffer[255];
-		Format(buffer, sizeof(buffer), "CREATE TABLE IF NOT EXISTS `VPNBlock` (`playername` char(128) NOT NULL, `steamid` char(32) NOT NULL, `lastupdated` int(64) NOT NULL, `ip` char(32) NOT NULL, `proxy` boolean NOT NULL, PRIMARY KEY (`ip`))");
-		SQL_TQuery(db, queryC, buffer);
+		g_db = db;
+		g_db.Query(queryC, "CREATE TABLE IF NOT EXISTS `VPNBlock` (`playername` char(128) NOT NULL, `steamid` char(32) NOT NULL, `lastupdated` int(64) NOT NULL, `ip` char(32) NOT NULL, `proxy` boolean NOT NULL, PRIMARY KEY (`ip`))");
+		g_db.Query(queryI, "CREATE TABLE IF NOT EXISTS `VPNBlock_wl` (`steamid` char(32) NOT NULL, PRIMARY KEY (`steamid`))");
 	}
 }
 
-public void queryC(Handle owner, Handle hndl, const char[] error, any data)
+public void queryC(Database db, DBResultSet results, const char[] error, any data)
 {
-	if (hndl == null)
+	if (results == null)
 	{
 		VPNBlock_Log(2, _, _, error);
 		return;
@@ -63,29 +62,43 @@ public void OnClientAuthorized(int client, const char[] auth)
 {
 	if (!IsFakeClient(client))
 	{
-		char ip[30];
-		GetClientIP(client, ip, sizeof(ip));
-		char buffer[255];
-		Format(buffer, sizeof(buffer), "SELECT proxy FROM VPNBlock WHERE ip = '%s'", ip);
-		
-		DBResultSet query = SQL_Query(db, buffer);
-		if (query == null)
+		char buffer[255], steamid[28];
+		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+		strcopy(steamid, sizeof(steamid), steamid[8]);
+		Format(buffer, sizeof(buffer), "SELECT * FROM `VPNBlock_wl` WHERE `steamid` = '%s'", steamid);
+		DBResultSet whitelist = SQL_Query(g_db, buffer);
+		if (whitelist == null)
 		{
 			char error[255];
-			SQL_GetError(db, error, sizeof(error));
+			SQL_GetError(g_db, error, sizeof(error));
 			VPNBlock_Log(2, _, _, error);
 			OnPluginStart();
 		}
-		else if (!SQL_FetchRow(query))
+		else if (!SQL_FetchRow(whitelist))
 		{
-			CheckIpHttp(ip, client);
+			char ip[30], buffer2[255];
+			GetClientIP(client, ip, sizeof(ip));
+			Format(buffer2, sizeof(buffer2), "SELECT `proxy` FROM `VPNBlock` WHERE `ip` = '%s'", ip);
+			DBResultSet query = SQL_Query(g_db, buffer2);
+			if (query == null)
+			{
+				char error[255];
+				SQL_GetError(g_db, error, sizeof(error));
+				VPNBlock_Log(2, _, _, error);
+				OnPluginStart();
+			}
+			else if (!SQL_FetchRow(query))
+			{
+				CheckIpHttp(ip, client);
+			}
+			else if (SQL_FetchInt(query, 0) == 1)
+			{
+				VPNBlock_Log(0, client, ip);
+				KickClient(client, "%t", "VPN Kick");
+			}
+			delete query;
 		}
-		else if (SQL_FetchInt(query, 0) == 1)
-		{
-			VPNBlock_Log(0, client, ip);
-			KickClient(client, "%t", "VPN Kick");
-		}
-		delete query;
+		delete whitelist;
 	}
 }
 
@@ -109,9 +122,7 @@ void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest r
 	{
 		char[] content = new char[response.ContentLength + 1];
 		response.GetContent(content, response.ContentLength + 1);
-		char steamid[28];
-		char name[100];
-		char ip[30];
+		char steamid[28], name[100], ip[30];
 		DataPack pack = request.Any;
 		pack.Reset();
 		pack.ReadString(ip, sizeof(ip));
@@ -119,21 +130,21 @@ void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest r
 		delete pack;
 		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
 		GetClientName(client, name, sizeof(name));
+		int proxy;
 		
 		if (StrEqual(content, "Y"))
 		{
 			VPNBlock_Log(0, client, ip);
 			KickClient(client, "%t", "VPN Kick");
-			char query[300];
-			Format(query, sizeof(query), "INSERT INTO VPNBlock(playername, steamid, lastupdated, ip, proxy) VALUES('%s', '%s', '%d', '%s', '1');", name, steamid, GetTime(), ip);
-			SQL_TQuery(db, queryI, query);
+			proxy = 1;
 		}
 		else
 		{
-			char query[300];
-			Format(query, sizeof(query), "INSERT INTO VPNBlock(playername, steamid, lastupdated, ip, proxy) VALUES('%s', '%s', '%d', '%s', '0');", name, steamid, GetTime(), ip);
-			SQL_TQuery(db, queryI, query);
+			proxy = 0;
 		}
+		char query[300];
+		Format(query, sizeof(query), "INSERT INTO `VPNBlock`(`playername`, `steamid`, `lastupdated`, `ip`, `proxy`) VALUES('%s', '%s', '%d', '%s', '%d');", name, steamid, GetTime(), ip, proxy);
+		g_db.Query(queryI, query);
 	}
 	else
 	{
@@ -145,9 +156,9 @@ void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest r
 	}
 }
 
-public void queryI(Handle owner, Handle hndl, const char[] error, any data)
+public void queryI(Database db, DBResultSet results, const char[] error, any data)
 {
-	if (hndl == null)
+	if (results == null)
 	{
 		VPNBlock_Log(2, _, _, error);
 		OnPluginStart();
@@ -158,16 +169,58 @@ void PruneDatabase()
 {
 	int maxlastupdated = GetTime() - (PDAYS * 86400);
 	char buffer[255];
-	Format(buffer, sizeof(buffer), "DELETE FROM VPNBlock WHERE lastupdated<'%d';", maxlastupdated);
-	SQL_TQuery(db, queryP, buffer);
+	Format(buffer, sizeof(buffer), "DELETE FROM `VPNBlock` WHERE `lastupdated`<'%d';", maxlastupdated);
+	g_db.Query(queryP, buffer);
 }
 
-public void queryP(Handle owner, Handle hndl, const char[] error, any data)
+public void queryP(Database db, DBResultSet results, const char[] error, any data)
 {
-	if (hndl == null)
+	if (results == null)
 	{
 		VPNBlock_Log(2, _, _, error);
 	}
+}
+
+public Action CommandWhiteList(int client, int args)
+{
+	if (args != 1)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_vb_whitelist \"<SteamID>\"");
+		return Plugin_Handled;
+	}
+	
+	char steamid[28];
+	GetCmdArgString(steamid, sizeof(steamid));
+	StripQuotes(steamid);
+	
+	if (StrContains(steamid, "STEAM_") == 0)
+		strcopy(steamid, sizeof(steamid), steamid[8]);
+	
+	char query[100];
+	Format(query, sizeof(query), "INSERT INTO `VPNBlock_wl`(`steamid`) VALUES('%s');", steamid);
+	g_db.Query(queryI, query);
+	return Plugin_Handled;
+}
+
+public Action CommandUnWhiteList(int client, int args)
+{
+	if (args != 1)
+	{
+		ReplyToCommand(client, "[SM] Usage: sm_vb_unwhitelist \"<SteamID>\"");
+		return Plugin_Handled;
+	}
+	
+	char steamid[28];
+	GetCmdArgString(steamid, sizeof(steamid));
+	StripQuotes(steamid);
+	
+	if (StrContains(steamid, "STEAM_") == 0)
+		strcopy(steamid, sizeof(steamid), steamid[8]);
+	
+	char query[100];
+	Format(query, sizeof(query), "DELETE FROM `VPNBlock_wl` WHERE `steamid`='%s';", steamid);
+	g_db.Query(queryI, query);
+	return Plugin_Handled;
 }
 
 void VPNBlock_Log(int logtype, int client = 0, char[] ip = "", const char[] error = "")

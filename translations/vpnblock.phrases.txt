@@ -2,7 +2,7 @@
 {
 	"VPN Kick"
 	{
-		"en"	"You can't join the server if you're using a VPN"
+		"en"	"You can't join this server if you're using a VPN"
 		"fi"	"Et voi liittyä serverille jos sinulla on VPN käytössä"
 	}
 	"Log VPN Kick"
