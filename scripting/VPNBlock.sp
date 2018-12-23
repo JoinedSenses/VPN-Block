@@ -130,6 +130,9 @@ void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest r
 		delete pack;
 		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
 		GetClientName(client, name, sizeof(name));
+		int buffer_len = strlen(name) * 2 + 1;
+		char[] newname = new char[buffer_len];
+		SQL_EscapeString(g_db, name, newname, buffer_len);
 		int proxy;
 		
 		if (StrEqual(content, "Y"))
@@ -143,7 +146,7 @@ void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest r
 			proxy = 0;
 		}
 		char query[300];
-		Format(query, sizeof(query), "INSERT INTO `VPNBlock`(`playername`, `steamid`, `lastupdated`, `ip`, `proxy`) VALUES('%s', '%s', '%d', '%s', '%d');", name, steamid, GetTime(), ip, proxy);
+		Format(query, sizeof(query), "INSERT INTO `VPNBlock`(`playername`, `steamid`, `lastupdated`, `ip`, `proxy`) VALUES('%s', '%s', '%d', '%s', '%d');", newname, steamid, GetTime(), ip, proxy);
 		g_db.Query(queryI, query);
 	}
 	else
