@@ -199,8 +199,12 @@ public Action CommandWhiteList(int client, int args)
 	if (StrContains(steamid, "STEAM_") == 0)
 		strcopy(steamid, sizeof(steamid), steamid[8]);
 	
+	int buffer_len = strlen(steamid) * 2 + 1;
+	char[] escsteamid = new char[buffer_len];
+	SQL_EscapeString(g_db, steamid, escsteamid, buffer_len);
+	
 	char query[100];
-	Format(query, sizeof(query), "INSERT INTO `VPNBlock_wl`(`steamid`) VALUES('%s');", steamid);
+	Format(query, sizeof(query), "INSERT INTO `VPNBlock_wl`(`steamid`) VALUES('%s');", escsteamid);
 	g_db.Query(queryI, query);
 	return Plugin_Handled;
 }
@@ -220,8 +224,12 @@ public Action CommandUnWhiteList(int client, int args)
 	if (StrContains(steamid, "STEAM_") == 0)
 		strcopy(steamid, sizeof(steamid), steamid[8]);
 	
+	int buffer_len = strlen(steamid) * 2 + 1;
+	char[] escsteamid = new char[buffer_len];
+	SQL_EscapeString(g_db, steamid, escsteamid, buffer_len);
+	
 	char query[100];
-	Format(query, sizeof(query), "DELETE FROM `VPNBlock_wl` WHERE `steamid`='%s';", steamid);
+	Format(query, sizeof(query), "DELETE FROM `VPNBlock_wl` WHERE `steamid`='%s';", escsteamid);
 	g_db.Query(queryI, query);
 	return Plugin_Handled;
 }
