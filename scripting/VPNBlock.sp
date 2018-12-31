@@ -25,8 +25,8 @@ public void OnPluginStart()
 		Database.Connect(OnSqlConnect, "VPNBlock");
 	else
 		Database.Connect(OnSqlConnect, "default");
-	RegAdminCmd("sm_vb_whitelist", CommandWhiteList, ADMFLAG_ROOT);
-	RegAdminCmd("sm_vb_unwhitelist", CommandUnWhiteList, ADMFLAG_ROOT);
+	RegAdminCmd("sm_vbwhitelist", CommandWhiteList, ADMFLAG_ROOT, "sm_vbwhitelist \"<SteamID>\"");
+	RegAdminCmd("sm_vbunwhitelist", CommandUnWhiteList, ADMFLAG_ROOT, "sm_vbunwhitelist \"<SteamID>\"");
 }
 
 public void OnSqlConnect(Database db, const char[] error, any data)
@@ -188,24 +188,11 @@ public Action CommandWhiteList(int client, int args)
 {
 	if (args != 1)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_vb_whitelist \"<SteamID>\"");
+		ReplyToCommand(client, "[SM] Usage: sm_vbwhitelist \"<SteamID>\"");
 		return Plugin_Handled;
 	}
 	
-	char steamid[28];
-	GetCmdArgString(steamid, sizeof(steamid));
-	StripQuotes(steamid);
-	
-	if (StrContains(steamid, "STEAM_") == 0)
-		strcopy(steamid, sizeof(steamid), steamid[8]);
-	
-	int buffer_len = strlen(steamid) * 2 + 1;
-	char[] escsteamid = new char[buffer_len];
-	SQL_EscapeString(g_db, steamid, escsteamid, buffer_len);
-	
-	char query[100];
-	Format(query, sizeof(query), "INSERT INTO `VPNBlock_wl`(`steamid`) VALUES('%s');", escsteamid);
-	g_db.Query(queryI, query);
+	WhiteList(true);
 	return Plugin_Handled;
 }
 
@@ -213,14 +200,19 @@ public Action CommandUnWhiteList(int client, int args)
 {
 	if (args != 1)
 	{
-		ReplyToCommand(client, "[SM] Usage: sm_vb_unwhitelist \"<SteamID>\"");
+		ReplyToCommand(client, "[SM] Usage: sm_vbunwhitelist \"<SteamID>\"");
 		return Plugin_Handled;
 	}
 	
+	WhiteList(false);
+	return Plugin_Handled;
+}
+
+void WhiteList(bool whitelist)
+{
 	char steamid[28];
 	GetCmdArgString(steamid, sizeof(steamid));
 	StripQuotes(steamid);
-	
 	if (StrContains(steamid, "STEAM_") == 0)
 		strcopy(steamid, sizeof(steamid), steamid[8]);
 	
@@ -229,9 +221,11 @@ public Action CommandUnWhiteList(int client, int args)
 	SQL_EscapeString(g_db, steamid, escsteamid, buffer_len);
 	
 	char query[100];
-	Format(query, sizeof(query), "DELETE FROM `VPNBlock_wl` WHERE `steamid`='%s';", escsteamid);
+	if (whitelist)
+		Format(query, sizeof(query), "INSERT INTO `VPNBlock_wl`(`steamid`) VALUES('%s');", escsteamid);
+	else
+		Format(query, sizeof(query), "DELETE FROM `VPNBlock_wl` WHERE `steamid`='%s';", escsteamid);
 	g_db.Query(queryI, query);
-	return Plugin_Handled;
 }
 
 void VPNBlock_Log(int logtype, int client = 0, char[] ip = "", const char[] error = "")
