@@ -128,6 +128,8 @@ void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest r
 		pack.ReadString(ip, sizeof(ip));
 		int client = pack.ReadCell();
 		delete pack;
+		if (!IsClientConnected(client))
+			return;
 		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
 		GetClientName(client, name, sizeof(name));
 		int buffer_len = strlen(name) * 2 + 1;
