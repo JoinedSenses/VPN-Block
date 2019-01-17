@@ -166,6 +166,7 @@ public int HttpResponseCompleted(Handle request, bool failure, bool requestSucce
 	if(failure || !requestSuccessful)
 	{
 		VPNBlock_Log(1);
+		delete pack;
 		delete request;
 	}
 }
