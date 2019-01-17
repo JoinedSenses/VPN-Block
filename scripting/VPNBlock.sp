@@ -1,5 +1,5 @@
 #include <sourcemod>
-#include <system2>
+#include <SteamWorks>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -11,12 +11,15 @@ public Plugin myinfo =
 	name = "VPN Block",
 	author = "PwnK",
 	description = "Blocks VPNs",
-	version = "1.0.2",
+	version = "1.1.0",
 	url = "https://pelikriisi.fi/"
 };
 
 Database g_db;
-bool g_written = false;
+
+ConVar gcv_KickClients;
+ConVar gcv_url;
+ConVar gcv_response;
 
 public void OnPluginStart()
 {
@@ -27,6 +30,11 @@ public void OnPluginStart()
 		Database.Connect(OnSqlConnect, "default");
 	RegAdminCmd("sm_vbwhitelist", CommandWhiteList, ADMFLAG_ROOT, "sm_vbwhitelist \"<SteamID>\"");
 	RegAdminCmd("sm_vbunwhitelist", CommandUnWhiteList, ADMFLAG_ROOT, "sm_vbunwhitelist \"<SteamID>\"");
+	
+	gcv_KickClients = CreateConVar("vpnblock_kickclients", "1", "1 = Kick and log client when he tries to join with a VPN 0 = only log", _, true, 0.0, true, 1.0);
+	gcv_url = CreateConVar("vpnblock_url", "http://proxy.mind-media.com/block/proxycheck.php?ip={IP}", "The url used to check proxies.");
+	gcv_response = CreateConVar("vpnblock_response", "Y", "If the response contains this it means the player is using a VPN.");
+	AutoExecConfig(true, "VPNBlock");
 }
 
 public void OnSqlConnect(Database db, const char[] error, any data)
@@ -53,11 +61,6 @@ public void queryC(Database db, DBResultSet results, const char[] error, any dat
 	PruneDatabase();
 }
 
-public void OnMapStart()
-{
-	g_written = false;
-}
-
 public void OnClientAuthorized(int client, const char[] auth)
 {
 	if (!IsFakeClient(client))
@@ -76,10 +79,10 @@ public void OnClientAuthorized(int client, const char[] auth)
 		}
 		else if (!SQL_FetchRow(whitelist))
 		{
-			char ip[30], buffer2[255];
+			char ip[30];
 			GetClientIP(client, ip, sizeof(ip));
-			Format(buffer2, sizeof(buffer2), "SELECT `proxy` FROM `VPNBlock` WHERE `ip` = '%s'", ip);
-			DBResultSet query = SQL_Query(g_db, buffer2);
+			Format(buffer, sizeof(buffer), "SELECT `proxy` FROM `VPNBlock` WHERE `ip` = '%s'", ip);
+			DBResultSet query = SQL_Query(g_db, buffer);
 			if (query == null)
 			{
 				char error[255];
@@ -94,7 +97,8 @@ public void OnClientAuthorized(int client, const char[] auth)
 			else if (SQL_FetchInt(query, 0) == 1)
 			{
 				VPNBlock_Log(0, client, ip);
-				KickClient(client, "%t", "VPN Kick");
+				if (gcv_KickClients.BoolValue)
+					KickClient(client, "%t", "VPN Kick");
 			}
 			delete query;
 		}
@@ -108,56 +112,61 @@ void CheckIpHttp(char[] ip, int client)
 	pack.WriteString(ip);
 	pack.WriteCell(client);
 	char url[85];
-	Format(url, sizeof(url), "http://proxy.mind-media.com/block/proxycheck.php?ip=%s", ip);
-	System2HTTPRequest CheckIp = new System2HTTPRequest(HttpResponseCallback, url);
-	CheckIp.Any = pack;
-	CheckIp.Timeout = 5;
-	CheckIp.GET();
-	delete CheckIp;
+	gcv_url.GetString(url, sizeof(url));
+	ReplaceString(url, sizeof(url), "{IP}", ip, true);
+	Handle CheckIp = SteamWorks_CreateHTTPRequest(k_EHTTPMethodGET, url);
+	SteamWorks_SetHTTPCallbacks(CheckIp, HttpResponseCompleted, _, HttpResponseDataReceived);
+	SteamWorks_SetHTTPRequestContextValue(CheckIp, pack);
+	SteamWorks_SetHTTPRequestNetworkActivityTimeout(CheckIp, 5);
+	SteamWorks_SendHTTPRequest(CheckIp);
 }
 
-void HttpResponseCallback(bool success, const char[] error, System2HTTPRequest request, System2HTTPResponse response, HTTPRequestMethod method)
+public int HttpRequestData(const char[] content, DataPack pack)
 {
-	if(success)
+	char steamid[28], name[100], ip[30];
+	pack.Reset();
+	pack.ReadString(ip, sizeof(ip));
+	int client = pack.ReadCell();
+	delete pack;
+	if (!IsClientConnected(client))
+		return;
+	GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
+	GetClientName(client, name, sizeof(name));
+	int buffer_len = strlen(name) * 2 + 1;
+	char[] newname = new char[buffer_len];
+	SQL_EscapeString(g_db, name, newname, buffer_len);
+	int proxy;
+	char responsevpn[30];
+	gcv_response.GetString(responsevpn, sizeof(responsevpn));
+	
+	if (StrContains(content, responsevpn) != -1)
 	{
-		char[] content = new char[response.ContentLength + 1];
-		response.GetContent(content, response.ContentLength + 1);
-		char steamid[28], name[100], ip[30];
-		DataPack pack = request.Any;
-		pack.Reset();
-		pack.ReadString(ip, sizeof(ip));
-		int client = pack.ReadCell();
-		delete pack;
-		if (!IsClientConnected(client))
-			return;
-		GetClientAuthId(client, AuthId_Steam2, steamid, sizeof(steamid));
-		GetClientName(client, name, sizeof(name));
-		int buffer_len = strlen(name) * 2 + 1;
-		char[] newname = new char[buffer_len];
-		SQL_EscapeString(g_db, name, newname, buffer_len);
-		int proxy;
-		
-		if (StrEqual(content, "Y"))
-		{
-			VPNBlock_Log(0, client, ip);
+		VPNBlock_Log(0, client, ip);
+		if (gcv_KickClients.BoolValue)
 			KickClient(client, "%t", "VPN Kick");
-			proxy = 1;
-		}
-		else
-		{
-			proxy = 0;
-		}
-		char query[300];
-		Format(query, sizeof(query), "INSERT INTO `VPNBlock`(`playername`, `steamid`, `lastupdated`, `ip`, `proxy`) VALUES('%s', '%s', '%d', '%s', '%d');", newname, steamid, GetTime(), ip, proxy);
-		g_db.Query(queryI, query);
+		proxy = 1;
 	}
 	else
 	{
-		if (!g_written)
-		{
-			g_written = true;
-			VPNBlock_Log(1);
-		}
+		proxy = 0;
+	}
+	char query[300];
+	Format(query, sizeof(query), "INSERT INTO `VPNBlock`(`playername`, `steamid`, `lastupdated`, `ip`, `proxy`) VALUES('%s', '%s', '%d', '%s', '%d');", newname, steamid, GetTime(), ip, proxy);
+	g_db.Query(queryI, query);
+}
+
+public int HttpResponseDataReceived(Handle request, bool failure, int offset, int bytesReceived, DataPack pack)
+{
+	SteamWorks_GetHTTPResponseBodyCallback(request, HttpRequestData, pack);
+	delete request;
+}
+
+public int HttpResponseCompleted(Handle request, bool failure, bool requestSuccessful, EHTTPStatusCode statusCode, DataPack pack)
+{
+	if(failure || !requestSuccessful)
+	{
+		VPNBlock_Log(1);
+		delete request;
 	}
 }
 
