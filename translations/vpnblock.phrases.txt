@@ -4,22 +4,26 @@
 	{
 		"en"	"You can't join this server if you're using a VPN"
 		"fi"	"Et voi liittyä serverille jos sinulla on VPN käytössä"
+		"hu"	"Nem csatlakozhatsz erre a szerverre ha VPN-t használsz"
 	}
 	"Log VPN Kick"
 	{
 		"#format"	"{1:s},{2:s},{3:s},{4:s}"
 		"en"	"{1} | {2}({3}) tried to join the server with a VPN. IP: {4}"
 		"fi"	"{1} | {2}({3}) yritti joinata serverille VPN:n kanssa. IP: {4}"
+		"hu"	"{1} | {2}({3}) megpróbált a szerverre csatlakozni VPN-el IP: {4}"
 	}
 	"Http Error"
 	{
 		"#format"	"{1:s}"
 		"en"	"{1} | Couldn't connect to the website."
 		"fi"	"{1} | Ei pystytty yhdistämään nettisivuun."
+		"hu"	"{1} | Nem lehet csatlakozni a weboldalhoz."
 	}
 	"Query Failure"
 	{
 		"#format"	"{1:s},{2:s}"
 		"en"	"{1} | Query failure: {2}"
+		"hu"	"{1} | Lekérdezési hiba: {2}"
 	}
 }
