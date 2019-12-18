@@ -103,7 +103,7 @@ public void SQL_CheckVPN(Database db, DBResultSet results, const char[] error, i
 	char ip[30];
 	GetClientIP(client, ip, sizeof(ip));
 
-	if (results.RowCount == 0) {
+	if (results.RowCount == 0 || !results.FetchRow()) {
 		CheckIpHttp(ip, client);
 	}
 	else if (results.FetchInt(0) == 1) {
