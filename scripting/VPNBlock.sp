@@ -117,7 +117,7 @@ public void SQL_CheckVPN(Database db, DBResultSet results, const char[] error, i
 void CheckIpHttp(char[] ip, int client) {
 	DataPack pack = new DataPack();
 	pack.WriteString(ip);
-	pack.WriteCell(client);
+	pack.WriteCell(GetClientUserId(client));
 
 	char url[85];
 	gcv_url.GetString(url, sizeof(url));
@@ -134,7 +134,7 @@ public int HttpRequestData(const char[] content, DataPack pack) {
 	char steamid[28], name[100], ip[30];
 	pack.Reset();
 	pack.ReadString(ip, sizeof(ip));
-	int client = pack.ReadCell();
+	int client = GetClientOfUserId(pack.ReadCell());
 	delete pack;
 
 	if (!client || !IsClientConnected(client)) {
