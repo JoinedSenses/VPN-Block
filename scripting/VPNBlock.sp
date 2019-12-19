@@ -23,7 +23,7 @@ ConVar gcv_response;
 public void OnPluginStart() {
 	LoadTranslations ("vpnblock.phrases");
 
-	Database.Connect(OnSqlConnect, SQL_CheckConfig("VPNBlock") ? "VPNBlock" : "default");
+	Database.Connect(SQLHandler_Connect, SQL_CheckConfig("VPNBlock") ? "VPNBlock" : "default");
 
 	RegAdminCmd("sm_vbwhitelist", CommandWhiteList, ADMFLAG_ROOT, "sm_vbwhitelist \"<SteamID>\"");
 	RegAdminCmd("sm_vbunwhitelist", CommandUnWhiteList, ADMFLAG_ROOT, "sm_vbunwhitelist \"<SteamID>\"");
@@ -35,7 +35,7 @@ public void OnPluginStart() {
 	AutoExecConfig(true, "VPNBlock");
 }
 
-public void OnSqlConnect(Database db, const char[] error, any data) {
+public void SQLHandler_Connect(Database db, const char[] error, any data) {
 	if (db == null || error[0] != '\0') {
 		SetFailState("Unable to connect to database (%s)", error);
 	}
@@ -62,10 +62,10 @@ public void OnClientAuthorized(int client, const char[] auth) {
 	char buffer[256];
 	Format(buffer, sizeof(buffer), "SELECT * FROM `VPNBlock_wl` WHERE `steamid` = '%s'", auth[8]);
 
-	g_db.Query(SQL_CheckWhitelist, buffer, GetClientUserId(client));
+	g_db.Query(SQLHandler_CheckWhitelist, buffer, GetClientUserId(client));
 }
 
-public void SQL_CheckWhitelist(Database db, DBResultSet results, const char[] error, int userid) {
+public void SQLHandler_CheckWhitelist(Database db, DBResultSet results, const char[] error, int userid) {
 	if (db == null || results == null || error[0] != '\0') {
 		VPNBlock_Log(2, _, _, error);
 		return;
@@ -86,10 +86,10 @@ public void SQL_CheckWhitelist(Database db, DBResultSet results, const char[] er
 	char buffer[256];
 	Format(buffer, sizeof(buffer), "SELECT `proxy` FROM `VPNBlock` WHERE `ip` = '%s'", ip);
 
-	g_db.Query(SQL_CheckVPN, buffer, userid);
+	g_db.Query(SQLHandler_CheckVPN, buffer, userid);
 }
 
-public void SQL_CheckVPN(Database db, DBResultSet results, const char[] error, int userid) {
+public void SQLHandler_CheckVPN(Database db, DBResultSet results, const char[] error, int userid) {
 	if (db == null || results == null || error[0] != '\0') {
 		VPNBlock_Log(2, _, _, error);
 		return;
