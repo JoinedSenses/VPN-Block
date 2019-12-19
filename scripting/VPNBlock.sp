@@ -104,17 +104,18 @@ public void SQLHandler_CheckVPN(Database db, DBResultSet results, const char[] e
 	GetClientIP(client, ip, sizeof(ip));
 
 	if (results.RowCount == 0 || !results.FetchRow()) {
-		CheckIpHttp(ip, client);
+		Http_CheckIp(ip, client);
 	}
 	else if (results.FetchInt(0) == 1) {
 		VPNBlock_Log(0, client, ip);
+		
 		if (gcv_KickClients.BoolValue) {
 			KickClient(client, "%t", "VPN Kick");
 		}
 	}
 }
 
-void CheckIpHttp(char[] ip, int client) {
+void Http_CheckIp(char[] ip, int client) {
 	DataPack pack = new DataPack();
 	pack.WriteString(ip);
 	pack.WriteCell(GetClientUserId(client));
@@ -130,7 +131,7 @@ void CheckIpHttp(char[] ip, int client) {
 	SteamWorks_SendHTTPRequest(CheckIp);
 }
 
-public int HttpRequestData(const char[] content, DataPack pack) {
+public int Http_RequestData(const char[] content, DataPack pack) {
 	char steamid[28], name[100], ip[30];
 	pack.Reset();
 	pack.ReadString(ip, sizeof(ip));
@@ -176,7 +177,7 @@ public void SQLHandler_InsertPlayerData(Database db, DBResultSet results, const 
 }
 
 public int HttpResponseDataReceived(Handle request, bool failure, int offset, int bytesReceived, DataPack pack) {
-	SteamWorks_GetHTTPResponseBodyCallback(request, HttpRequestData, pack);
+	SteamWorks_GetHTTPResponseBodyCallback(request, Http_RequestData, pack);
 	delete request;
 }
 
@@ -194,10 +195,10 @@ void PruneDatabase() {
 	char buffer[256];
 	Format(buffer, sizeof(buffer), "DELETE FROM `VPNBlock` WHERE `lastupdated`<'%d';", maxlastupdated);
 
-	g_db.Query(queryP, buffer);
+	g_db.Query(SQLHandler_Prune, buffer);
 }
 
-public void queryP(Database db, DBResultSet results, const char[] error, any data) {
+public void SQLHandler_Prune(Database db, DBResultSet results, const char[] error, any data) {
 	if (db == null || results == null || error[0] != '\0') {
 		VPNBlock_Log(2, _, _, error);
 	}
